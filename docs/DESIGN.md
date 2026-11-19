@@ -23,7 +23,9 @@ laminar_t  = sigmoid((eps_star − Q_t) / sigma_q)
 
 `w_geom` and `w_freq` are learned scalars. `laminar_t` is a soft gate: it multiplies the salience (C) and the state write gate (G).
 
-**Peak cap.** After normalisation, the largest weight in each row is clipped to `1 − eta`, and the excess is spread uniformly over the allowed keys, so no single key dominates a row.
+**Peak cap.** After normalisation, every weight is clipped to magnitude `1 − eta`. The clipped (signed) mass is spread uniformly over the allowed keys that still have room in its direction, and this repeats until no key exceeds the cap. The row sum is preserved. A row is left unchanged only when the cap is infeasible, i.e. when (allowed keys) × (1 − eta) < |row sum|; for a normalised row that means a single allowed key, such as the first position.
+
+Version 1.0.0 also returned the excess to the clipped key itself, so the peak could reach `1 − eta + eta / cnt` (0.975 for two allowed keys with `eta = 0.05`). It also changed the row sum of signed rows with tied or negative peaks. Fixed in 1.0.1.
 
 ## C — Content-directed sparse access (`salience_topk`)
 

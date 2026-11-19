@@ -9,7 +9,7 @@ Drop-in replacement for a causal self-attention sublayer: forward(h) -> (out, No
 F  regularity-preserving stability (flags `stream_regularity`, `peak_cap`)
    Q_t = w_geom * |h_t - h_{t-1}|^2 + w_freq * |h_t - EMA_t(h)|^2   (causal, O(T*D) statistic)
    laminar_t = sigmoid((eps - Q_t) / sigma)  (soft gate used by C and G)
-   peak_cap: no single key receives more than (1 - eta) of a row's weight mass
+   peak_cap: no single key receives more than (1 - eta) of a row's weight mass (unless the row has one key)
 C  content-directed sparse long-range access (flag `salience_topk`)
    every query attends to its local causal window (w) PLUS the top-k most SALIENT earlier positions
    outside the window, salience_j = <a, h_j> (learned) * laminar_j (if F is on). The selected far keys
@@ -112,12 +112,28 @@ class SF2Attention(nn.Module):
         return (1 - m) * pos + m * signed
 
     def cap(self, w, mask):
+        """Clip |w| to c = 1 - eta per row and move the clipped (signed) mass to the allowed keys that still have
+        room in its direction, repeating until no key exceeds c; the row sum is preserved. A row is left
+        unchanged when the cap is infeasible, i.e. when (allowed keys) * c < |row sum| (for a normalised row: a
+        single allowed key); for every feasible row a receiver always exists.
+        1.0.0 also returned the clipped mass to the clipped key itself, so the peak could reach c + eta / cnt."""
         if not self.flags["peak_cap"]:
             return w
-        excess = (w.abs().max(-1, keepdim=True).values - (1 - self.eta)).clamp(min=0)
-        hit = (w.abs() == w.abs().max(-1, keepdim=True).values).float()
-        cnt = mask.float().sum(-1, keepdim=True).clamp(min=1)
-        return (w - hit * excess * torch.sign(w) + excess / cnt * mask.float()) * mask.float()
+        c = 1 - self.eta
+        m = mask.to(w.dtype)
+        w = w * m
+        feasible = m.sum(-1, keepdim=True) * c >= w.sum(-1, keepdim=True).abs()
+        for _ in range(2 * w.shape[-1]):
+            over = (w.abs() - c).clamp(min=0) * m * feasible
+            over = over * (over > torch.finfo(w.dtype).eps)              # ignore rounding residue at the cap
+            if not bool((over > 0).any()):
+                break
+            clipped = w - torch.sign(w) * over
+            moved = (torch.sign(w) * over).sum(-1, keepdim=True)
+            recv = m * (torch.sign(moved) * clipped < c).to(w.dtype)
+            n = recv.sum(-1, keepdim=True)
+            w = torch.where(n > 0, clipped + moved / n.clamp(min=1) * recv, w)
+        return w
 
     # ---------------------------------------------------------------- G
     def state(self, h, lam):

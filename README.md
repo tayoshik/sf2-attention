@@ -40,7 +40,7 @@ Each mechanism can be switched off independently for ablation. All are on by def
 | `salience_topk` | content-directed sparse access | each query sees its last `window` positions plus the `topk` most salient earlier positions; salience is learned and also biases the selected scores, so the selector is trained |
 | `signed_dual` | signed evidence | mixes a non-negative channel with a signed channel (learned per head), so evidence can be subtracted as well as added |
 | `stream_regularity` | streaming regularity | a causal O(T·D) statistic of local change produces a soft "laminar" gate used by selection and state |
-| `peak_cap` | peak cap | no single key receives more than (1 − `eta`) of a row's weight mass |
+| `peak_cap` | peak cap | no single key receives more than (1 − `eta`) of a row's weight mass (rows with a single allowed key are left unchanged); fixed in 1.0.1, see `CHANGELOG.md` |
 | `state_channel` | gated state | a persistent latent state m_t = (1 − g_t)·m_{t−1} + g_t·u_t, computed exactly in parallel and added to the output |
 
 Other arguments: `window` (16), `topk` (16), `dropout` (0.1), `eps_star`, `sigma_q`, `ema_decay`, `eta`.
@@ -80,5 +80,5 @@ The example demonstrates integration and training mechanics on a toy key-value r
 If you have a commercial license and publish work that uses SF2, please cite:
 
 ```
-tayoshik. SF2 Attention (reference implementation), version 1.0.0, 2026.
+tayoshik. SF2 Attention (reference implementation), version 1.0.1, 2026.
 ```

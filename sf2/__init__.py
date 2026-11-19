@@ -4,4 +4,4 @@
 from .attention import SF2Attention
 
 __all__ = ["SF2Attention"]
-__version__ = "1.0.0"
+__version__ = "1.0.1"
